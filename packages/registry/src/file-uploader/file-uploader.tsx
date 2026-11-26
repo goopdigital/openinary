@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   File as FileIcon,
   Film,
+  FolderOpen,
   ImageIcon,
   RotateCw,
   UploadCloud,
@@ -17,42 +18,30 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   DEFAULT_ACCEPT,
-  DEFAULT_MAX_SIZE,
+  isUploadPending,
+  uploadMaxSize,
   useFileUpload,
   type FileUploadState,
-  type SignedUpload,
-  type UploadFileError,
-  type UploadedFile,
+  type UseFileUploadOptions,
 } from "@/components/openinary/use-file-upload";
 
-export interface FileUploaderProps {
-  /** Base URL of the Openinary API, e.g. https://media.example.com. Falls back to NEXT_PUBLIC_OPENINARY_URL. */
-  baseUrl?: string;
-  /**
-   * Returns a presigned upload signature from your backend (which calls
-   * `POST /upload/sign` with an Openinary API key). Called before each upload
-   * batch and on retry. The upload's destination folder is whatever the
-   * signature is scoped to.
-   */
-  sign: () => Promise<SignedUpload> | SignedUpload;
-  /** Allow selecting multiple files. Default true. */
-  multiple?: boolean;
-  /** Accepted MIME types mapped to extensions. Defaults to the Openinary media types. */
-  accept?: Record<string, string[]>;
-  /** Max file size in bytes. Default 50MB. */
-  maxSize?: number;
-  /** Client-side cap on the number of files. Not enforced by the server. */
-  maxFiles?: number;
-  /** Transformation segments to pre-warm, e.g. ["w_800,f_webp"]. */
-  transformations?: string[];
+export type FileUploaderProps = UseFileUploadOptions & {
+  /** Enable the directory picker on session-based uploaders. */
+  allowDirectoryUpload?: boolean;
   /** Upload automatically as soon as files are added. Default false. */
   autoUpload?: boolean;
   disabled?: boolean;
   className?: string;
-  onSuccess?: (files: UploadedFile[]) => void;
-  onError?: (error: UploadFileError) => void;
-  onProgress?: (file: FileUploadState, progress: number) => void;
-}
+};
+
+const statusLabels = {
+  idle: "Waiting to upload",
+  queued: "Waiting to upload",
+  processing: "Processing and saving…",
+  retrying: "Waiting to retry…",
+  success: "Uploaded",
+  aborted: "Cancelled",
+};
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -88,43 +77,36 @@ function FileThumbnail({ file }: { file: FileUploadState }) {
 }
 
 export function FileUploader({
-  baseUrl,
-  sign,
-  multiple = true,
-  accept = DEFAULT_ACCEPT,
-  maxSize = DEFAULT_MAX_SIZE,
-  maxFiles,
-  transformations,
+  allowDirectoryUpload = false,
   autoUpload = false,
   disabled = false,
   className,
-  onSuccess,
-  onError,
-  onProgress,
+  ...options
 }: FileUploaderProps) {
+  const { accept = DEFAULT_ACCEPT, maxFiles, multiple = true } = options;
+  const maxSize = uploadMaxSize(options.authMode, options.maxSize);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const directoryRef = React.useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = React.useState(false);
+  const [emptyDirectory, setEmptyDirectory] = React.useState(false);
 
-  const { files, isUploading, addFiles, removeFile, upload, retry, abort, clear } =
-    useFileUpload({
-      baseUrl,
-      sign,
-      multiple,
-      accept,
-      maxSize,
-      maxFiles,
-      transformations,
-      onSuccess,
-      onError,
-      onProgress,
-    });
+  const {
+    files,
+    isUploading,
+    addFiles,
+    removeFile,
+    upload,
+    retry,
+    abort,
+    clear,
+  } = useFileUpload(options);
 
   const handleFiles = React.useCallback(
-    (list: FileList | File[]) => {
-      const added = addFiles(list);
+    (list: FileList | File[], directory = false) => {
+      const added = addFiles(list, directory);
+      setEmptyDirectory(directory && !added.length);
       if (autoUpload && added.some((f) => f.status === "idle")) {
-        // Defer so state has settled before uploading.
-        setTimeout(() => void upload(), 0);
+        void upload();
       }
     },
     [addFiles, autoUpload, upload],
@@ -146,12 +128,14 @@ export function FileUploader({
     [disabled, handleFiles],
   );
 
-  const hasPending = files.some(
-    (f) => f.status === "idle" || f.status === "aborted",
-  );
+  const hasPending = files.some((f) => f.status === "idle");
+  const limits = [
+    Number.isFinite(maxSize) && `Up to ${formatBytes(maxSize)} per file`,
+    maxFiles && `max ${maxFiles} file${maxFiles > 1 ? "s" : ""}`,
+  ].filter(Boolean);
 
   return (
-    <div className={cn("flex w-full flex-col gap-4", className)}>
+    <div className={cn("flex w-full min-w-0 flex-col gap-4", className)}>
       <div
         role="button"
         tabIndex={disabled ? -1 : 0}
@@ -185,28 +169,61 @@ export function FileUploader({
         <UploadCloud className="size-8 text-muted-foreground" />
         <div className="text-sm font-medium">
           Drag &amp; drop files here, or{" "}
-          <span className="text-primary underline underline-offset-4">browse</span>
+          <span className="text-primary underline underline-offset-4">
+            browse
+          </span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Up to {formatBytes(maxSize)} per file
-          {maxFiles ? ` · max ${maxFiles} file${maxFiles > 1 ? "s" : ""}` : ""}
-        </p>
-        <input
-          ref={inputRef}
-          type="file"
-          className="sr-only"
-          multiple={multiple}
-          accept={acceptAttribute(accept)}
-          disabled={disabled}
-          onChange={(e) => {
-            if (e.target.files?.length) handleFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
+        {limits.length > 0 && (
+          <p className="text-xs text-muted-foreground">{limits.join(" · ")}</p>
+        )}
       </div>
+      <input
+        ref={inputRef}
+        type="file"
+        hidden
+        multiple={multiple}
+        accept={acceptAttribute(accept)}
+        disabled={disabled}
+        onChange={(e) => {
+          if (e.target.files?.length) handleFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+
+      {allowDirectoryUpload && options.authMode === "session" && multiple && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={directoryRef}
+            type="file"
+            hidden
+            multiple
+            disabled={disabled}
+            {...{ webkitdirectory: "" }}
+            onChange={(e) => {
+              if (e.target.files?.length) handleFiles(e.target.files, true);
+              e.target.value = "";
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={() => directoryRef.current?.click()}
+          >
+            <FolderOpen className="size-4" />
+            Select folder
+          </Button>
+          {emptyDirectory && (
+            <span role="status" className="text-xs text-muted-foreground">
+              No files were added from this folder.
+            </span>
+          )}
+        </div>
+      )}
 
       {files.length > 0 && (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex max-h-[min(16rem,40dvh)] flex-col gap-2 overflow-y-auto">
           {files.map((file) => (
             <li
               key={file.id}
@@ -216,37 +233,54 @@ export function FileUploader({
 
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium">{file.name}</span>
+                  <span
+                    className="truncate text-sm font-medium"
+                    title={file.relativePath ?? file.name}
+                  >
+                    {file.relativePath ?? file.name}
+                  </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {formatBytes(file.size)}
                   </span>
                 </div>
 
                 {file.status === "uploading" && (
-                  <Progress value={file.progress} className="h-1.5" />
+                  <>
+                    <Progress
+                      aria-label={`Uploading ${file.relativePath ?? file.name}`}
+                      value={file.progress || undefined}
+                      className={cn(
+                        "h-1.5",
+                        file.progress === 0 && "animate-pulse",
+                      )}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {file.progress > 0
+                        ? `Uploading ${file.progress}%`
+                        : "Uploading…"}
+                    </span>
+                  </>
                 )}
 
                 {file.status === "error" && (
                   <span className="flex items-center gap-1 text-xs text-destructive">
                     <AlertCircle className="size-3" />
-                    {file.error}
+                    <span>Failed. {file.error}</span>
                   </span>
                 )}
 
-                {file.status === "success" && (
+                {file.status !== "uploading" && file.status !== "error" && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <CheckCircle2 className="size-3 text-green-600" />
-                    Uploaded
+                    {file.status === "success" && (
+                      <CheckCircle2 className="size-3 text-green-600" />
+                    )}
+                    {statusLabels[file.status]}
                   </span>
-                )}
-
-                {file.status === "aborted" && (
-                  <span className="text-xs text-muted-foreground">Cancelled</span>
                 )}
               </div>
 
               <div className="flex shrink-0 items-center gap-1">
-                {file.status === "uploading" ? (
+                {isUploadPending(file.status) ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -259,18 +293,20 @@ export function FileUploader({
                   </Button>
                 ) : (
                   <>
-                    {file.status === "error" && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        aria-label="Retry upload"
-                        onClick={() => void retry(file.id)}
-                      >
-                        <RotateCw className="size-4" />
-                      </Button>
-                    )}
+                    {(file.status === "error" || file.status === "aborted") &&
+                      !file.validationError && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          aria-label="Retry upload"
+                          disabled={disabled}
+                          onClick={() => void retry(file.id)}
+                        >
+                          <RotateCw className="size-4" />
+                        </Button>
+                      )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -304,7 +340,7 @@ export function FileUploader({
             onClick={() => void upload()}
             disabled={disabled || isUploading || !hasPending}
           >
-            {isUploading ? "Uploading…" : "Upload"}
+            {isUploading ? "Uploading…" : "Upload files"}
           </Button>
         </div>
       )}

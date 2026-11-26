@@ -68,8 +68,8 @@ signing-route examples per framework. Two registry items:
 That page assumes shadcn, which this project may not have. If there is no
 components.json, or no Button and Progress in it, do NOT run \`shadcn init\`:
 it would restructure a project that never asked for it. Do not add
-lucide-react either. No new dependency. Take use-file-upload.ts ALONE,
-verbatim, from the registry JSON, which carries each file's target and its
+lucide-react either. Copy use-file-upload.ts and upload-transport.ts verbatim
+from the registry JSON, which carries each file's target and its
 full content:
 
   https://openinary.dev/r/file-uploader.json

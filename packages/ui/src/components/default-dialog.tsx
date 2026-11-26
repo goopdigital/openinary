@@ -2,10 +2,11 @@
 
 import { ReactNode, Ref, useEffect, useImperativeHandle, useState } from "react";
 import { cn } from "../lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 
 export function DefaultDialog({
   title,
+  description,
   isOpen,
   trigger,
   children,
@@ -13,14 +14,18 @@ export function DefaultDialog({
   ref,
   contentClassName,
   onEscapeKeyDown,
+  unmountOnClose = false,
 }: {
   title: string | ReactNode;
+  description?: string;
   isOpen?: boolean;
   trigger?: ReactNode;
   children: ReactNode;
   onClose?: () => void;
   ref?: Ref<{ close: () => void }>;
   contentClassName?: string;
+  /** Unmount children as soon as the dialog closes, before the exit animation. */
+  unmountOnClose?: boolean;
   /**
    * Radix hears Escape first (capture phase), so a popup open inside the
    * dialog (a Base UI select, say) can't keep it to itself: call
@@ -51,8 +56,9 @@ export function DefaultDialog({
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {children}
+        {(!unmountOnClose || open) && children}
       </DialogContent>
     </Dialog>
   );

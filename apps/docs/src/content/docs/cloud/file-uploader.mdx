@@ -221,7 +221,7 @@ Treat this as a confirmation, not a gallery. The original is full-size bytes and
 | `transformations` | **Ignored.** Variants are generated on the first request instead of at upload time |
 | `prewarmedUrls` / `queuedTransformationUrls` | Never returned, for the same reason |
 | `maxSize` | Component default is 50 MB. Cloud has no server-side size setting, raise it only after testing the sizes you need |
-| Destination folder | Always the one in the signature. `folder` set on the component is ignored when a signature is used |
+| Destination folder | Set the destination when requesting the signature. Pass `sign` to the component and omit `folder` |
 
 ## Handling quota errors
 

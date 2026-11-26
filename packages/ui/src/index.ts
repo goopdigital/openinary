@@ -146,7 +146,7 @@ export {
   type OnboardingVariant,
 } from "./onboarding/onboarding";
 
-// File uploader (presigned direct upload)
+// File uploader
 export { FileUploader, type FileUploaderProps } from "./file-uploader/file-uploader";
 export {
   useFileUpload,
@@ -160,3 +160,9 @@ export {
   type UploadFileError,
   type UseFileUploadOptions,
 } from "./file-uploader/use-file-upload";
+export {
+  uploadViaXhr,
+  type UploadTransport,
+  type UploadTransportRequest,
+  type UploadTransportResponse,
+} from "./file-uploader/upload-transport";
