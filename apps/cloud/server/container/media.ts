@@ -21,5 +21,8 @@ const videoJobStore = new PgVideoJobStore(db);
 await videoJobStore.hydrate();
 // public/ goes unused: storage is always configured here.
 export const paths = enginePathsIn(process.cwd());
-export const queue = new VideoJobQueue(videoJobStore, storage, { paths });
+export const queue = new VideoJobQueue(videoJobStore, storage, {
+  paths,
+  video: { ffmpegTimeoutSeconds: parseInt(process.env.VIDEO_FFMPEG_TIMEOUT_SECONDS ?? "", 10) },
+});
 queue.start();

@@ -69,9 +69,10 @@ async function convertWithSharp(
  * - Format conversion (mp4, mov, webm, jpg, png, webp, avif, …)
  * - Auto-downscales to 720p max (unless explicit resize specified)
  * - Default compression quality of 60/100 (CRF 31), optimised for 8K
- * - Ultra-fast encoding preset with baseline profile for minimal CPU usage
- * - Audio copied without re-encoding
- * - 5-minute timeout protection (accommodates 8K videos)
+ * - H.264 High profile with yuv420p and the fast encoding preset
+ * - Two-pass VP9 with Opus audio for WebM
+ * - Audio copied for MP4 and MOV
+ * - Configurable timeout for the entire encode
  *
  * Thumbnail pipeline detail:
  *   1. ffmpeg seeks to tt_N and extracts one JPEG frame (universal support).

@@ -1,8 +1,14 @@
 import ffmpeg, { FfmpegCommand, FilterSpecification } from "fluent-ffmpeg";
-import { readFile, unlink, rmdir } from "fs/promises";
+import { readFile, rmdir } from "fs/promises";
+import { join } from "path";
 import type { VideoContext, TransformFunction } from "./types";
-import type { VideoSettings } from "./config";
+import { type VideoSettings } from "./config";
 import { expectedOutputSeconds } from "../../eta";
+import { extOf } from "../../url/media-types";
+import { removeTempFile } from "../stage-source";
+
+// The analysis pass accounts for roughly a quarter of the measured encode time.
+const FIRST_PASS_FRACTION = 0.25;
 
 /**
  * How far an encode has got. outputSeconds is the duration of the video being
@@ -31,29 +37,29 @@ export class VideoCommandBuilder {
   private complexFilter: FilterSpecification[];
   private outputVideoStream: string;
   private context: VideoContext;
+  private readonly timeoutSeconds: number;
   private cleanupFunctions: ((() => void) | (() => Promise<void>))[];
 
   constructor(
     context: VideoContext,
-    settings: Pick<VideoSettings, "ffmpegThreads" | "ffmpegNiceness">,
+    settings: Pick<VideoSettings, "ffmpegThreads" | "ffmpegNiceness" | "ffmpegTimeoutSeconds">,
   ) {
     this.context = context;
     this.complexFilter = [];
     this.outputVideoStream = "0:v";
+    this.timeoutSeconds = settings.ffmpegTimeoutSeconds;
     this.cleanupFunctions = [];
     this.command = ffmpeg(context.inputPath, { niceness: settings.ffmpegNiceness })
-      .output(context.outputPath)
       .addOption("-threads", String(settings.ffmpegThreads));
 
-    // -movflags and -max_muxing_queue_size are MOV/MP4 container options and are
-    // incompatible with image output formats (image2 muxer used for thumbnails).
-    // Only apply them for video output.
     if (context.isImageOutput) {
-      this.command = this.command.noAudio();
+      this.command.noAudio();
     } else {
-      this.command = this.command
-        .addOption("-movflags", "+faststart") // Optimize for web streaming
-        .addOption("-max_muxing_queue_size", "1024"); // Prevent buffer issues
+      const format = extOf(context.outputPath);
+      if (format === "mp4" || format === "mov") {
+        this.command.addOption("-movflags", "+faststart");
+      }
+      this.command.addOption("-max_muxing_queue_size", "1024"); // Prevent buffer issues
     }
   }
 
@@ -83,54 +89,106 @@ export class VideoCommandBuilder {
   }
 
   /**
-   * Execute the ffmpeg command and return the output buffer
-   * Handles cleanup of temporary files
-   * Includes a 5-minute timeout to handle large videos (4K, 8K)
-   *
-   * onProgress is measured against the output's own duration rather than
-   * fluent-ffmpeg's `percent`, which divides by the *input* duration and so
-   * never gets past a fraction of the way on a trimmed video.
+   * Encode and return the output buffer. Both WebM passes share one timeout.
    */
   async execute(onProgress?: (progress: EncodeProgress) => void): Promise<Buffer> {
-    const TIMEOUT_MS = 300000; // 5 minutes (increased for 8K videos)
+    const deadline = performance.now() + this.timeoutSeconds * 1_000;
+    const { outputPath, tmpDir, isImageOutput } = this.context;
+    const passLog = !isImageOutput && extOf(outputPath) === "webm"
+      ? join(tmpDir, "vp9-pass")
+      : undefined;
+    const hasFilters = this.complexFilter.length > 0;
 
-    if (this.complexFilter.length > 0) {
-      this.command
-        .complexFilter(this.complexFilter)
-        .outputOptions(["-map", `[${this.outputVideoStream}]`]);
-      // Still-image outputs cannot contain audio, even when the source does.
-      if (!this.context.isImageOutput) {
-        this.command.outputOptions(["-map", "0:a?"]);
+    try {
+      if (hasFilters) {
+        this.command
+          .complexFilter(this.complexFilter)
+          .addOption("-map", `[${this.outputVideoStream}]`);
+      }
+
+      if (passLog) {
+        // Clone before assigning an output so fluent-ffmpeg keeps the video options.
+        const firstPass = this.command.clone()
+          .noAudio()
+          .format("null")
+          // The null muxer defaults to passthrough. Match WebM's frame sync.
+          .addOption("-fps_mode", "vfr")
+          .addOption("-pass", "1")
+          .addOption("-passlogfile", passLog)
+          .output("-");
+        await this.runPass(firstPass, deadline, onProgress && (progress => {
+          onProgress({
+            ...progress,
+            fraction: progress.fraction * FIRST_PASS_FRACTION,
+          });
+        }));
+        this.command.addOption("-pass", "2").addOption("-passlogfile", passLog);
+      }
+
+      if (hasFilters && !isImageOutput) {
+        this.command.addOption("-map", "0:a?");
+      }
+      this.command.output(outputPath);
+      await this.runPass(this.command, deadline, passLog && onProgress ? progress => {
+        onProgress({
+          ...progress,
+          fraction: FIRST_PASS_FRACTION + (1 - FIRST_PASS_FRACTION) * progress.fraction,
+        });
+      } : onProgress);
+      return await readFile(outputPath);
+    } finally {
+      await removeTempFile(outputPath);
+      if (passLog) await removeTempFile(`${passLog}-0.log`);
+      try {
+        await this.cleanup();
+      } finally {
+        await rmdir(tmpDir).catch(() => {});
       }
     }
+  }
 
-    return new Promise((resolve, reject) => {
-      // Set timeout to kill ffmpeg if it takes too long
+  private async runPass(
+    command: FfmpegCommand,
+    deadline: number,
+    onProgress?: (progress: EncodeProgress) => void,
+  ): Promise<void> {
+    const remaining = deadline - performance.now();
+    const timeoutMessage = `Video processing timeout: exceeded the ${this.timeoutSeconds}s limit. Try reducing video resolution or duration.`;
+    if (remaining <= 0) throw new Error(timeoutMessage);
+
+    return new Promise<void>((resolve, reject) => {
+      let timedOut = false;
       const timeoutId = setTimeout(() => {
-        this.command.kill("SIGKILL");
-        reject(
-          new Error(
-            "Video processing timeout: exceeded 5 minutes. Try reducing video resolution or duration.",
-          ),
-        );
-      }, TIMEOUT_MS);
+        timedOut = true;
+        command.kill("SIGKILL");
+      }, remaining);
 
-      this.command.on("start", (cmd) => {
-        console.log(cmd);
+      const finish = (error?: unknown) => {
+        clearTimeout(timeoutId);
+        if (timedOut) reject(new Error(timeoutMessage));
+        else if (error) reject(new Error(
+          `Video processing failed: ${error instanceof Error ? error.message : String(error)}`,
+        ));
+        else resolve();
+      };
+
+      command.once("start", (cmd) => {
+        if (timedOut) command.kill("SIGKILL");
+        else console.log(cmd);
       });
-      
+
       if (onProgress) {
         let outputSeconds: number | null = null;
-        this.command
-          .on('codecData', (data: { duration?: string }) => {
+        command
+          .once("codecData", (data: { duration?: string }) => {
             outputSeconds = expectedOutputSeconds(
               parseTimemark(data.duration),
               this.context.params,
             );
           })
-          .on('progress', (progress: { timemark?: string }) => {
+          .on("progress", (progress: { timemark?: string }) => {
             const done = parseTimemark(progress.timemark);
-            if (!outputSeconds || done === null) return;
+            if (timedOut || !outputSeconds || done === null) return;
             onProgress({
               fraction: Math.min(1, Math.max(0, done / outputSeconds)),
               outputSeconds,
@@ -138,38 +196,12 @@ export class VideoCommandBuilder {
           });
       }
 
-      this.command
-        .on("end", async () => {
-          clearTimeout(timeoutId);
-          try {
-            // Read the output file
-            const buffer = await readFile(this.context.outputPath);
-
-            // Cleanup: remove output file and temp directory
-            await unlink(this.context.outputPath);
-            try {
-              await rmdir(this.context.tmpDir);
-            } catch {
-              // Ignore if directory is not empty or already removed
-            }
-
-            resolve(buffer);
-          } catch (error) {
-            reject(error);
-          } finally {
-            try {
-              this.cleanup();
-            } catch (error) {
-              reject(error);
-            }
-          }
-        })
-        .on("error", (error) => {
-          clearTimeout(timeoutId);
-          this.cleanup();
-          reject(new Error(`Video processing failed: ${error.message}`));
-        })
-        .run();
+      command.once("end", () => finish()).once("error", finish);
+      try {
+        command.run();
+      } catch (error) {
+        finish(error);
+      }
     });
   }
 

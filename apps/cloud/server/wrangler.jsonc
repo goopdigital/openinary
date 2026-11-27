@@ -147,6 +147,7 @@
   "vars": {
     "CORS_ORIGIN": "https://app.openinary.dev",
     "BETTER_AUTH_URL": "https://cdn.openinary.dev",
+    "VIDEO_FFMPEG_TIMEOUT_SECONDS": "300",
     // The admin panel (apps/cloud/admin). Shares this auth server with the customer
     // app above, so it appears in trustedOrigins and in the /api/* CORS list;
     // its own /admin/* routes are pinned to it alone.
@@ -232,6 +233,7 @@
       "vars": {
         "CORS_ORIGIN": "https://preprod-app.openinary.dev",
         "BETTER_AUTH_URL": "https://preprod-cdn.openinary.dev",
+        "VIDEO_FFMPEG_TIMEOUT_SECONDS": "300",
         "ADMIN_ORIGIN": "https://preprod-admin.openinary.dev",
         "AUTH_COOKIE_PREFIX": "openinary-preprod",
         "ALLOW_PUBLIC_SIGNUP": "true",

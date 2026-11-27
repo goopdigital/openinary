@@ -157,7 +157,7 @@ A bare `/t/clip.mp4` streams the original untouched. Add `q_auto` to opt into th
 
 The default `q_60` favors encoding speed over file size, which is what makes large sources viable. Raise it when output quality matters more than job time.
 
-Videos also apply fixed limits: 720p maximum when you request no explicit `w` or `h`, a 200 MB cap on the source, and a 5 minute encode timeout. See [video processing](/configuration/video-processing).
+Videos default to a 720p maximum when you request no explicit `w` or `h` and have a 200 MB source size cap. The encode timeout defaults to five minutes and is configurable with `VIDEO_FFMPEG_TIMEOUT_SECONDS`. See [video processing](/configuration/video-processing).
 
 **Input:** MP4 (H.264/H.265), MOV, WebM (VP8/VP9) · **Output:** MP4, WebM, MOV
 

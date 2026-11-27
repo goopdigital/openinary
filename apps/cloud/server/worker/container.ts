@@ -64,6 +64,7 @@ export class MediaContainer extends Container<Env> {
       R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
       R2_BUCKET_NAME: env.R2_BUCKET_NAME,
       R2_ENDPOINT: env.R2_ENDPOINT,
+      VIDEO_FFMPEG_TIMEOUT_SECONDS: env.VIDEO_FFMPEG_TIMEOUT_SECONDS,
     };
   }
 
