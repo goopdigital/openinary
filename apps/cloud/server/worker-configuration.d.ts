@@ -13,6 +13,7 @@ interface __BaseEnv_Env {
   CORS_ORIGIN: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+  VIDEO_FFMPEG_TIMEOUT_SECONDS: "300";
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GITHUB_CLIENT_ID: string;
@@ -55,6 +56,7 @@ declare namespace NodeJS {
         | "CORS_ORIGIN"
         | "BETTER_AUTH_SECRET"
         | "BETTER_AUTH_URL"
+        | "VIDEO_FFMPEG_TIMEOUT_SECONDS"
         | "GOOGLE_CLIENT_ID"
         | "GOOGLE_CLIENT_SECRET"
         | "GITHUB_CLIENT_ID"

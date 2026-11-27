@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { UploadTransport } from "../file-uploader/upload-transport";
 
 export type OpeninaryFetch = (
   input: RequestInfo | URL,
@@ -13,8 +14,10 @@ export interface OpeninaryConfig {
   /** Base for /t/ transformation URLs. No trailing slash. Null while the
    *  host app cannot know it yet: nothing is built on it until it is set. */
   transformBaseUrl: string | null;
-  /** Every request the package makes goes through this. */
+  /** Fetch implementation for non-upload requests. */
   fetch: OpeninaryFetch;
+  uploadTransport?: UploadTransport;
+  uploadDirectoryPathField?: "names" | "folder";
   /**
    * Browse and download only: no upload, new folder, rename, move or delete
    * anywhere in the package. UX only; the API refuses the writes either way.
@@ -33,6 +36,11 @@ export interface OpeninaryProviderProps {
    *  Cannot be passed as a prop from a Server Component — functions aren't
    *  serializable across the RSC boundary. */
   fetch?: OpeninaryFetch;
+  /** Optional progress-aware multipart transport. With a custom fetch and no
+   *  transport, uploads use that fetch to preserve its auth and request handling. */
+  uploadTransport?: UploadTransport;
+  /** Defaults to `names`. Use `folder` for APIs that accept the full directory there. */
+  uploadDirectoryPathField?: "names" | "folder";
   /** Hide every control that changes media (a read-only role). Default false. */
   readOnly?: boolean;
   children: React.ReactNode;
@@ -46,6 +54,8 @@ export function OpeninaryProvider({
   apiBaseUrl,
   transformBaseUrl,
   fetch: fetchImpl,
+  uploadTransport,
+  uploadDirectoryPathField,
   readOnly = false,
   children,
 }: OpeninaryProviderProps) {
@@ -60,9 +70,26 @@ export function OpeninaryProvider({
         fetchImpl ??
         ((input, init) =>
           globalThis.fetch(input, { credentials: "include", ...init })),
+      uploadTransport:
+        uploadTransport ??
+        (fetchImpl &&
+          (({ url, body, signal }) =>
+            fetchImpl(url, {
+              method: "POST",
+              body,
+              signal,
+            }))),
+      uploadDirectoryPathField,
       readOnly,
     }),
-    [apiBaseUrl, transformBaseUrl, fetchImpl, readOnly],
+    [
+      apiBaseUrl,
+      transformBaseUrl,
+      fetchImpl,
+      uploadTransport,
+      uploadDirectoryPathField,
+      readOnly,
+    ],
   );
 
   return (

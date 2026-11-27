@@ -48,11 +48,10 @@ export interface VideoTimingStats {
 }
 
 // Starting points until a deployment has finished enough jobs of its own.
-// h264 matches the cloud quota gate's 0.5 (ultrafast, about 2x real time at
-// 720p); VP9 realtime is markedly slower on the same CPU.
+// VP9 estimates include both encoding passes.
 const DEFAULT_RATIO: Record<VideoCodecFamily, Span> = {
   h264: [0.5, 1.2],
-  vp9: [1.5, 3],
+  vp9: [3.5, 6],
 };
 const DEFAULT_JOB: Span = [20, 60];
 // Download, probe and upload around the encode itself

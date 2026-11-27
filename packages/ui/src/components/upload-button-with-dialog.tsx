@@ -26,9 +26,12 @@ export function UploadDialog({
   return (
     <DefaultDialog
       title={uploadToFolder ? `Upload to ${uploadToFolder}` : "Upload files"}
+      description="Closing this dialog cancels pending uploads. Files already sent may still be saved."
       isOpen={open}
       onClose={() => onOpenChange?.(false)}
       trigger={trigger}
+      unmountOnClose
+      contentClassName="max-h-[calc(100dvh-1rem)] overflow-y-auto"
     >
       <UploadSection uploadToFolder={uploadToFolder} />
     </DefaultDialog>

@@ -6,11 +6,11 @@ import {
   BottomSheet,
   type MediaFile,
   MediaGrid,
-  UploadButtonWithDialog,
   UploadDialog,
+  useOpeninary,
   useStorageLevel,
 } from "@openinary/ui";
-import { ArrowUpRight, Plug } from "lucide-react";
+import { ArrowUpRight, Plug, Upload } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
@@ -60,6 +60,7 @@ export function AssetsView({
   busy?: boolean;
 }) {
   const { Link, docsUrl, useSearchParam } = useDashboard();
+  const { readOnly } = useOpeninary();
   const [assetId, setAssetId] = useSearchParam("asset");
   const [folderPath, setFolderPath] = useSearchParam("folder");
   // Lets anything link straight into the upload dialog (/?upload=true), like
@@ -238,7 +239,12 @@ export function AssetsView({
                         </Link>
                       </Button>
                     </BorderBeam>
-                    <UploadButtonWithDialog />
+                    {!readOnly && (
+                      <Button type="button" className="gap-1.5" onClick={() => setUpload("true")}>
+                        <Upload className="h-4 w-4" />
+                        Upload
+                      </Button>
+                    )}
                   </div>
                 }
                 emptyFooter={

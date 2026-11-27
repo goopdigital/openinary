@@ -43,6 +43,7 @@ export function CloudOpeninaryProvider({
     <OpeninaryProvider
       apiBaseUrl={SERVER_URL}
       transformBaseUrl={bucket ? deliveryBaseOf(bucket.id) : null}
+      uploadDirectoryPathField="folder"
     >
       {children}
     </OpeninaryProvider>

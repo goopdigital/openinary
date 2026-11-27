@@ -47,32 +47,21 @@ export const applyQuality: TransformFunction = (
       .videoCodec('libvpx-vp9')
       .addOption('-crf', crf.toString())
       .addOption('-b:v', '0')               // Constant-quality mode, CRF alone drives the rate
-      .addOption('-deadline', 'realtime')   // VP9's ultrafast equivalent
-      .addOption('-cpu-used', '8')
+      .addOption('-deadline', 'good')
+      .addOption('-cpu-used', '3')
       .addOption('-row-mt', '1')
+      .addOption('-lag-in-frames', '25')
+      .addOption('-auto-alt-ref', '1')
       .audioCodec('libopus') };
-  }
-
-  // Validate quality range (0-100)
-  if (!isValid) {
-    // Use default if invalid
-    return {
-      command: command
-        .videoCodec("libx264")
-        .addOption("-preset", "ultrafast") // Ultra fast preset for local dev
-        .addOption("-crf", crf.toString())
-        .audioCodec("copy"), // Copy audio without re-encoding
-    };
   }
 
   return {
     command: command
       .videoCodec("libx264")
-      .addOption("-preset", "ultrafast")
+      .addOption("-preset", "fast")
       .addOption("-crf", crf.toString())
-      .addOption("-tune", "fastdecode") // Optimize for fast decoding
-      .addOption("-profile:v", "baseline") // Use baseline profile for compatibility & speed
-      .addOption("-level", "3.0") // Lower level = simpler encoding
+      .addOption("-profile:v", "high")
+      .addOption("-pix_fmt", "yuv420p")
       .audioCodec("copy"), // Copy audio without re-encoding
   };
 };

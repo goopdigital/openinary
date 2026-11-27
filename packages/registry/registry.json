@@ -21,6 +21,11 @@
           "path": "src/file-uploader/use-file-upload.ts",
           "type": "registry:hook",
           "target": "components/openinary/use-file-upload.ts"
+        },
+        {
+          "path": "src/file-uploader/upload-transport.ts",
+          "type": "registry:lib",
+          "target": "components/openinary/upload-transport.ts"
         }
       ],
       "envVars": {

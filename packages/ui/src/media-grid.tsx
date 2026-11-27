@@ -67,9 +67,8 @@ import { useHideThumbnails } from "./hooks/use-hide-thumbnails";
 import { useFolderSummaries } from "./hooks/use-folder-summaries";
 import { preloadMedia } from "./hooks/use-preload-media";
 import { MoveToNavigator } from "./components/move-to-navigator";
-import { UploadButtonWithDialog } from "./components/upload-button-with-dialog";
+import { UploadDialog } from "./components/upload-button-with-dialog";
 import { CreateFolderButtonWithDialog } from "./components/create-folder-button-with-dialog";
-import { UploadSection } from "./components/upload-section";
 import { CreateFolderSection } from "./components/create-folder-section";
 import { BulkActionBarContent } from "./components/bulk-action-bar";
 import type { MediaFile } from "./types";
@@ -618,18 +617,31 @@ function MediaGridBody({
     );
   }, [selection, currentDir, selectionSlot, readOnly]);
 
+  // A successful upload can transition the grid out of its empty state.
+  // Keep the dialog in the same position so its queue survives that refresh.
+  const gridUploadDialog = (
+    <UploadDialog
+      uploadToFolder={folderPath ?? undefined}
+      open={gridUploadOpen}
+      onOpenChange={setGridUploadOpen}
+    />
+  );
+
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
-        <p>Failed to load media files. Please try again.</p>
-      </div>
+      <>
+        {gridUploadDialog}
+        <div className="flex items-center justify-center h-64 text-muted-foreground">
+          <p>Failed to load media files. Please try again.</p>
+        </div>
+      </>
     );
   }
 
   // Full-page empty state only at the root; inside a folder the "New folder"
   // tile below keeps the layout
   if (currentDir === "" && folders.length === 0 && files.length === 0) {
-    return (
+    const emptyState = (
       <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center">
         <Empty>
           <EmptyHeader>
@@ -645,15 +657,20 @@ function MediaGridBody({
           <EmptyContent>
             {emptyActions ?? (
               <div className="flex gap-2">
-                <BorderBeam
-                  size="pulse-outside"
-                  colorVariant="colorful"
-                  strength={0.7}
-                  theme={resolvedTheme === "light" ? "light" : "dark"}
-                  {...beamProps}
-                >
-                  <UploadButtonWithDialog />
-                </BorderBeam>
+                {!readOnly && (
+                  <BorderBeam
+                    size="pulse-outside"
+                    colorVariant="colorful"
+                    strength={0.7}
+                    theme={resolvedTheme === "light" ? "light" : "dark"}
+                    {...beamProps}
+                  >
+                    <Button type="button" className="gap-1.5" onClick={() => setGridUploadOpen(true)}>
+                      <Upload className="h-4 w-4" />
+                      Upload
+                    </Button>
+                  </BorderBeam>
+                )}
                 <Button variant="outline" asChild>
                   <a
                     href="https://docs.openinary.dev/"
@@ -684,6 +701,12 @@ function MediaGridBody({
           )}
         </Empty>
       </div>
+    );
+    return (
+      <>
+        {gridUploadDialog}
+        {emptyState}
+      </>
     );
   }
 
@@ -1116,6 +1139,7 @@ function MediaGridBody({
 
   return (
     <>
+      {gridUploadDialog}
       {selectionSlot &&
         selection.size > 0 &&
         createPortal(
@@ -1138,13 +1162,6 @@ function MediaGridBody({
         )}
       {/* Dialogs for grid-level context menu */}
       <DefaultDialog
-        isOpen={gridUploadOpen}
-        onClose={() => setGridUploadOpen(false)}
-        title={folderPath ? `Upload to ${folderPath}` : "Upload files"}
-      >
-        <UploadSection uploadToFolder={folderPath ?? undefined} />
-      </DefaultDialog>
-      <DefaultDialog
         isOpen={gridCreateFolderOpen}
         onClose={() => setGridCreateFolderOpen(false)}
         title={`Create folder${folderPath ? ` inside '${folderPath}'` : ""}`}
@@ -1156,13 +1173,11 @@ function MediaGridBody({
       </DefaultDialog>
 
       {/* Dialog for folder upload context menu */}
-      <DefaultDialog
-        isOpen={folderUploadTarget !== null}
-        onClose={() => setFolderUploadTarget(null)}
-        title={`Upload to ${folderUploadTarget}`}
-      >
-        <UploadSection uploadToFolder={folderUploadTarget ?? undefined} />
-      </DefaultDialog>
+      <UploadDialog
+        uploadToFolder={folderUploadTarget ?? undefined}
+        open={folderUploadTarget !== null}
+        onOpenChange={() => setFolderUploadTarget(null)}
+      />
 
       {/* Dialog for rename context menu */}
       <DefaultDialog

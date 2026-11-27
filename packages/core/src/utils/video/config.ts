@@ -118,6 +118,8 @@ export interface VideoSettings {
   ffmpegThreads: number;
   /** ffmpeg scheduling priority, 0 to 19 (higher = lower priority). */
   ffmpegNiceness: number;
+  /** Total seconds allowed for an encode, including all passes. */
+  ffmpegTimeoutSeconds: number;
   /** Age at which finished jobs are purged. */
   cleanupHours: number;
   /** How often the worker looks for queued jobs. */
@@ -137,11 +139,18 @@ export function detectVideoSettings(overrides: Partial<VideoSettings> = {}) {
     // Leaves one CPU free for the HTTP event loop so encoding never starves the API.
     ffmpegThreads: Math.max(1, cpu.count - 1),
     ffmpegNiceness: 15,
+    ffmpegTimeoutSeconds: 300,
     cleanupHours: 24,
     pollIntervalMs: 1000,
     ...definedOnly(overrides),
   };
   settings.ffmpegThreads = Math.max(1, settings.ffmpegThreads);
+
+  const timeoutSeconds = settings.ffmpegTimeoutSeconds;
+  if (!Number.isInteger(timeoutSeconds) || timeoutSeconds <= 0 || timeoutSeconds > 2_147_483) {
+    settings.ffmpegTimeoutSeconds = 300;
+  }
+
   return {
     settings,
     source: {

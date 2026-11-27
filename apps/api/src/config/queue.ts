@@ -20,6 +20,7 @@ export const videoJobQueue = new VideoJobQueue(
       maxConcurrent: intEnv("VIDEO_MAX_CONCURRENT"),
       ffmpegThreads: intEnv("VIDEO_FFMPEG_THREADS"),
       ffmpegNiceness: intEnv("VIDEO_FFMPEG_NICENESS"),
+      ffmpegTimeoutSeconds: intEnv("VIDEO_FFMPEG_TIMEOUT_SECONDS"),
       cleanupHours: intEnv("VIDEO_JOB_CLEANUP_HOURS"),
       pollIntervalMs: intEnv("VIDEO_WORKER_POLL_INTERVAL_MS"),
     },

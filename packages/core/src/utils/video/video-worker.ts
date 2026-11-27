@@ -62,6 +62,7 @@ export class VideoWorker extends EventEmitter {
         ...this.video.source,
         ffmpegThreads: this.video.settings.ffmpegThreads,
         ffmpegNiceness: this.video.settings.ffmpegNiceness,
+        ffmpegTimeoutSeconds: this.video.settings.ffmpegTimeoutSeconds,
       },
       "Starting video worker",
     );
