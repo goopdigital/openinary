@@ -128,6 +128,7 @@ test("a pending video transform answers 202 instead of the original", async () =
   assert.equal(body.estimatedSeconds, 6);
   assert.deepEqual(body.estimatedRange, [6, 9]);
   assert.equal(result.headers?.["Retry-After"], "6");
+  assert.equal(result.headers?.Refresh, "6");
   assert.equal(result.headers?.["X-Processing-Phase"], "processing");
 });
 

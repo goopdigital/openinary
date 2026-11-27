@@ -252,8 +252,10 @@ export function processingBody(
 
 /** Headers of a 202, for clients that never read the body */
 export function processingHeaders(estimate: ProcessingEstimate): Record<string, string> {
+  const delay = String(estimate.retryAfter);
   return {
-    "Retry-After": String(estimate.retryAfter),
+    "Retry-After": delay,
+    Refresh: delay,
     "X-Processing-Phase": estimate.phase,
     "X-Processing-Eta": String(estimate.estimatedSeconds),
   };
